@@ -1586,6 +1586,7 @@ const db = firebase.firestore(); // TAMBAHKAN BARIS INI
 }
 // Fungsi untuk mengambil data dari Firebase secara Real-time
 function listenToMonitoringData() {
+    console.log("Menghubungkan ke Firebase...");
     db.collection("monitoring")
       .orderBy("createdAt", "desc")
       .onSnapshot((snapshot) => {
@@ -1594,15 +1595,23 @@ function listenToMonitoringData() {
             data.push({ id: doc.id, ...doc.data() });
         });
         
-        // Simpan ke variabel monitoringData agar bisa dibaca fungsi render Anda
+        // Sesuaikan dengan variabel global di kode Anda
         monitoringData = data; 
         
-        // Panggil fungsi untuk menggambar tabel (Sesuaikan nama ini dengan fungsi tabel Anda)
-        renderMonitoringTable(); 
-        updateDashboardCards();
-        console.log("Data Firebase diperbarui:", data.length, "item");
+        // Simpan ke LocalStorage agar fitur lain yang masih baca LocalStorage tidak error
+        localStorage.setItem(KEY_MONITORING, JSON.stringify(data));
+
+        // Panggil fungsi render yang ada di kode asli Anda
+        if (typeof renderMonitoringTable === "function") {
+            renderMonitoringTable(); 
+        }
+        if (typeof updateDashboardCards === "function") {
+            updateDashboardCards();
+        }
+
+        console.log("Database Sinkron: " + data.length + " data berhasil dimuat.");
     }, (error) => {
-        console.error("Gagal mengambil data:", error);
+        console.error("Koneksi Firestore Gagal:", error);
     });
 }
 
