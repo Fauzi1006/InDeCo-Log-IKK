@@ -1251,20 +1251,24 @@ const db = firebase.firestore(); // TAMBAHKAN BARIS INI
 
         // --- 5. FUNGSI AWAL SETELAH LOGIN ---
         function initAppData() {
-            const today = new Date().toISOString().split('T')[0];
-            const dateInput = document.getElementById('p-bulk-date');
-            if(dateInput && !dateInput.value) dateInput.value = today;
-            
-            const mDateInput = document.getElementById('m-date');
-            if(mDateInput && !mDateInput.value) mDateInput.value = today;
+    const today = new Date().toISOString().split('T')[0];
+    const dateInput = document.getElementById('p-bulk-date');
+    if(dateInput && !dateInput.value) dateInput.value = today;
+    
+    const mDateInput = document.getElementById('m-date');
+    if(mDateInput && !mDateInput.value) mDateInput.value = today;
 
-            updateDatalists();
-            
-            const lastPage = localStorage.getItem(KEY_LAST_PAGE) || 'dashboard';
-            const menu = document.getElementById('menu-' + lastPage);
-            const label = menu ? menu.getAttribute('data-tooltip') : 'Dashboard';
-            showPage(lastPage, label);
-        }
+    updateDatalists();
+    
+    // --- TAMBAHKAN INI ---
+    listenToMonitoringData(); 
+    // ---------------------
+
+    const lastPage = localStorage.getItem(KEY_LAST_PAGE) || 'dashboard';
+    const menu = document.getElementById('menu-' + lastPage);
+    const label = menu ? menu.getAttribute('data-tooltip') : 'Dashboard';
+    showPage(lastPage, label);
+}
 
         
 
@@ -1497,88 +1501,110 @@ const db = firebase.firestore(); // TAMBAHKAN BARIS INI
         }
 
         // --- PLANNING & MONITORING ---
-        function processBulkPlanning() {
-            const rawData = document.getElementById('p-bulk-data').value.trim();
-            let vendorName = document.getElementById('p-bulk-vendor').value.trim() || "BELUM BOOKING";
-            let selectedArea = document.getElementById('p-bulk-area').value.trim() || "-";
-            const manualDate = document.getElementById('p-bulk-date').value;
-            const manualNote = document.getElementById('p-bulk-catatan').value; 
+        async function processBulkPlanning() {
+    const rawData = document.getElementById('p-bulk-data').value.trim();
+    let vendorName = document.getElementById('p-bulk-vendor').value.trim() || "BELUM BOOKING";
+    let selectedArea = document.getElementById('p-bulk-area').value.trim() || "-";
+    const manualDate = document.getElementById('p-bulk-date').value;
+    const manualNote = document.getElementById('p-bulk-catatan').value; 
 
-            if(!manualDate) { alert("MOHON ISI TANGGAL PICKUP!"); return; }
-            if (!rawData) { alert("Mohon Paste data dari Excel!"); return; }
-            if (!confirm("APAKAH ANDA YAKIN AKAN MEMBUAT PLANNING DELIVERY INI?")) { return; }
+    if(!manualDate) { alert("MOHON ISI TANGGAL PICKUP!"); return; }
+    if (!rawData) { alert("Mohon Paste data dari Excel!"); return; }
+    if (!confirm("APAKAH ANDA YAKIN AKAN MEMBUAT PLANNING DELIVERY INI?")) { return; }
 
-            if(vendorName !== "BELUM BOOKING" && !historyVendors.includes(vendorName)) {
-                historyVendors.push(vendorName); localStorage.setItem('indeco_history_vendors', JSON.stringify(historyVendors));
-            }
-            if(manualNote && !historyNotes.includes(manualNote)) {
-                historyNotes.push(manualNote); localStorage.setItem('indeco_history_notes', JSON.stringify(historyNotes));
-            }
-            updateDatalists();
+    // Simpan history ke LocalStorage (opsional, untuk autocomplete saja)
+    if(vendorName !== "BELUM BOOKING" && !historyVendors.includes(vendorName)) {
+        historyVendors.push(vendorName); localStorage.setItem('indeco_history_vendors', JSON.stringify(historyVendors));
+    }
+    updateDatalists();
 
-            const rows = rawData.split('\n');
-            let monitoringStore = JSON.parse(localStorage.getItem(KEY_MONITORING)) || [];
-            const groups = {};
+    const rows = rawData.split('\n');
+    const groups = {};
 
-            rows.forEach(row => {
-                const cols = row.split('\t');
-                if (cols.length < 5) return;
-                const dnNumber = cols[1] ? cols[1].trim() : "";
-                const snNumber = cols[3] ? cols[3].trim() : "";
-                const customer = cols[4] ? cols[4].trim() : "";
-                
-                let rawCity = (cols[5] || "").toUpperCase().replace(/KABUPATEN|KAB\.|KOTA|ADMINISTRASI/gi, "").trim();
-                const city = rawCity.split(" ")[0]; 
-                const qty = parseFloat((cols[6] || "0").replace(/,/g, "")) || 0;
+    rows.forEach(row => {
+        const cols = row.split('\t');
+        if (cols.length < 5) return;
+        
+        const dnNumber = cols[1] ? cols[1].trim() : "";
+        const snNumber = cols[3] ? cols[3].trim() : "";
+        const customer = cols[4] ? cols[4].trim() : "";
+        let rawCity = (cols[5] || "").toUpperCase().replace(/KABUPATEN|KAB\.|KOTA|ADMINISTRASI/gi, "").trim();
+        const city = rawCity.split(" ")[0]; 
+        const qty = parseFloat((cols[6] || "0").replace(/,/g, "")) || 0;
 
-                const rawArmada = cols[8] ? cols[8].toUpperCase() : "";
-                let armadaType = "Lainnya";
-                if(rawArmada.includes("TRONTON")) armadaType = "TRONTON";
-                else if(rawArmada.includes("TRAILER")) armadaType = "TRAILER";
-                else if(rawArmada.includes("CDD") || rawArmada.includes("COLT")) armadaType = "CDD";
-                else if(rawArmada.includes("FUSO")) armadaType = "FUSO";
-                else if(rawArmada.includes("WING") || rawArmada.includes("BOX")) armadaType = "WINGBOX";
-                else if(rawArmada.includes("CONT") || rawArmada.includes("20") || rawArmada.includes("40")) armadaType = "CONTAINER";
-                else if(rawArmada.length > 2) armadaType = rawArmada; 
+        const rawArmada = cols[8] ? cols[8].toUpperCase() : "";
+        let armadaType = "Lainnya";
+        if(rawArmada.includes("TRONTON")) armadaType = "TRONTON";
+        else if(rawArmada.includes("TRAILER")) armadaType = "TRAILER";
+        else if(rawArmada.includes("CDD") || rawArmada.includes("COLT")) armadaType = "CDD";
+        else if(rawArmada.includes("FUSO")) armadaType = "FUSO";
+        else if(rawArmada.includes("WING") || rawArmada.includes("BOX")) armadaType = "WINGBOX";
+        else if(rawArmada.includes("CONT") || rawArmada.includes("20") || rawArmada.includes("40")) armadaType = "CONTAINER";
+        else if(rawArmada.length > 2) armadaType = rawArmada; 
 
-                const note1 = cols[7] ? cols[7].trim() : "";
-                const note2 = cols[9] ? cols[9].trim() : "";
-                const combinedNotes = (note1 + " " + note2 + " " + manualNote).toUpperCase();
+        const note1 = cols[7] ? cols[7].trim() : "";
+        const combinedNotes = (note1 + " " + manualNote).toUpperCase();
 
-                let isNextDay = combinedNotes.includes("NEXT DAY");
-                let isSelfPickup = combinedNotes.includes("AMBIL SENDIRI") || combinedNotes.includes("SELF PICKUP");
+        let isSelfPickup = combinedNotes.includes("AMBIL SENDIRI") || combinedNotes.includes("SELF PICKUP");
+        let finalNote = manualNote;
+        let finalArea = selectedArea;
+        if (isSelfPickup) { finalNote = "AMBIL SENDIRI"; finalArea = "AMBIL SENDIRI"; }
 
-                let finalNote = manualNote;
-                if (isNextDay) finalNote = finalNote ? finalNote + " (NEXT DAY)" : "NEXT DAY";
-                
-                let finalArea = selectedArea;
-                if (isSelfPickup) { finalNote = "AMBIL SENDIRI"; finalArea = "AMBIL SENDIRI"; }
+        const gbMatch = note1.match(/GB\s*(\d+)/i);
+        let groupKey = gbMatch ? `GB${gbMatch[1]}_${customer.replace(/\s+/g, '').toUpperCase()}_${snNumber.replace(/\s+/g, '')}` : `S_${Math.random()}`;
 
-                const gbMatch = note1.match(/GB\s*(\d+)/i);
-                let groupKey = gbMatch ? `GB${gbMatch[1]}_${customer.replace(/\s+/g, '').toUpperCase()}_${snNumber.replace(/\s+/g, '')}_${manualDate}` : `S_${Date.now()}_${Math.random()}`;
-
-                if (!groups[groupKey]) {
-                    groups[groupKey] = {
-                        id: Date.now() + Math.random(), dns: dnNumber, sn: snNumber, date: manualDate,
-                        vendor: vendorName, truck: armadaType, area: finalArea, city: city, customer: customer,
-                        qty: qty, catatan: finalNote, status: "Belum Masuk", gateInTime: null,
-                        originalDate: null 
-                    };
-                } else {
-                    if (!groups[groupKey].dns.includes(dnNumber)) groups[groupKey].dns += `, ${dnNumber}`;
-                    if (snNumber && !groups[groupKey].sn.includes(snNumber)) groups[groupKey].sn += `, ${snNumber}`;
-                    groups[groupKey].qty += qty;
-                }
-            });
-
-            Object.values(groups).forEach(item => monitoringStore.push(item));
-            localStorage.setItem(KEY_MONITORING, JSON.stringify(monitoringStore));
-            
-            document.getElementById('p-bulk-data').value = "";
-            document.getElementById('p-bulk-catatan').value = ""; 
-            // document.getElementById('p-bulk-vendor').value = ""; // Optional: keep vendor filled
-            showPage('monitoring', 'Live Monitoring');
+        if (!groups[groupKey]) {
+            groups[groupKey] = {
+                dns: dnNumber, sn: snNumber, date: manualDate,
+                vendor: vendorName, truck: armadaType, area: finalArea, city: city, customer: customer,
+                qty: qty, catatan: finalNote, status: "Belum Masuk", gateInTime: null,
+                createdAt: new Date().toISOString()
+            };
+        } else {
+            if (!groups[groupKey].dns.includes(dnNumber)) groups[groupKey].dns += `, ${dnNumber}`;
+            groups[groupKey].qty += qty;
         }
+    });
+
+    // --- BAGIAN PENTING: SIMPAN KE FIREBASE ---
+    const batch = db.batch();
+    Object.values(groups).forEach(item => {
+        const docRef = db.collection("monitoring").doc(); // Buat ID otomatis
+        batch.set(docRef, item);
+    });
+
+    try {
+        await batch.commit();
+        alert("Data Berhasil Tersimpan di Cloud Firebase!");
+        document.getElementById('p-bulk-data').value = "";
+        document.getElementById('p-bulk-catatan').value = ""; 
+        showPage('monitoring', 'Live Monitoring');
+    } catch (error) {
+        console.error("Error Firebase:", error);
+        alert("Gagal menyimpan ke database online!");
+    }
+}
+// Fungsi untuk mengambil data dari Firebase secara Real-time
+function listenToMonitoringData() {
+    db.collection("monitoring")
+      .orderBy("createdAt", "desc")
+      .onSnapshot((snapshot) => {
+        const data = [];
+        snapshot.forEach((doc) => {
+            data.push({ id: doc.id, ...doc.data() });
+        });
+        
+        // Simpan ke variabel monitoringData agar bisa dibaca fungsi render Anda
+        monitoringData = data; 
+        
+        // Panggil fungsi untuk menggambar tabel (Sesuaikan nama ini dengan fungsi tabel Anda)
+        renderMonitoringTable(); 
+        updateDashboardCards();
+        console.log("Data Firebase diperbarui:", data.length, "item");
+    }, (error) => {
+        console.error("Gagal mengambil data:", error);
+    });
+}
 
         // --- MANUAL PLANNING FUNCTION (NEW) ---
         function saveManualPlanning() {
